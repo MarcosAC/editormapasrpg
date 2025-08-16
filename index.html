@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor de Dungeons 2D</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Estilo principal do canvas */
+        #mapCanvas {
+            background-color: #f8f9fa;
+            cursor: crosshair;
+            transition: outline 0.2s ease;
+        }
+        
+        /* Estilo para botões ativos */
+        .tool-btn.active {
+            background-color: #0d6efd !important;
+            color: white !important;
+        }
+        
+        /* Estilo para os ícones arrastáveis */
+        .draggable-asset {
+            cursor: grab;
+            transition: transform 0.1s;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 2px;
+            background: white;
+        }
+        
+        .draggable-asset:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        
+        .draggable-asset:active {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+        
+        /* Feedback visual durante arraste */
+        #mapCanvas.drag-over {
+            outline: 2px dashed #0d6efd;
+            outline-offset: -2px;
+        }
+        
+        /* Melhoria na organização da biblioteca */
+        #assetsLibrary {
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        
+        /* Custom scrollbar */
+        #assetsLibrary::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        #assetsLibrary::-webkit-scrollbar-thumb {
+            background: #adb5bd;
+            border-radius: 3px;
+        }
+        
+        /* Estilo para emojis */
+        .emoji-asset {
+            font-size: 24px;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            cursor: grab;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar (Ferramentas) -->
+            <div class="col-md-2 bg-light p-3">
+                <h5 class="mb-3">Ferramentas</h5>
+                <div class="d-flex flex-column gap-2">
+                    <button id="pencilTool" class="btn btn-outline-primary active tool-btn">✏️ Lápis</button>
+                    <button id="eraseTool" class="btn btn-outline-secondary tool-btn">🧽 Borracha</button>
+                    <button id="rectTool" class="btn btn-outline-success tool-btn">⬛ Retângulo</button>
+                    <button id="selectTool" class="btn btn-outline-info tool-btn">✋ Selecionar</button>
+                    <hr>
+                    <button id="exportPNG" class="btn btn-success">Exportar PNG</button>
+                    <button id="clearCanvas" class="btn btn-danger">Limpar Tudo</button>
+                </div>
+                <hr>
+                
+                <h5>Biblioteca</h5>
+                <div class="mb-2">
+                    <input type="text" id="assetSearch" class="form-control form-control-sm" placeholder="Buscar...">
+                </div>
+                <div class="d-flex flex-wrap gap-2" id="assetsLibrary">
+                    <!-- Terreno -->
+                    <div class="asset-item" data-asset="wall" title="Parede">
+                        <div class="draggable-asset emoji-asset" draggable="true">🧱</div>
+                    </div>
+                    <div class="asset-item" data-asset="floor" title="Chão">
+                        <div class="draggable-asset emoji-asset" draggable="true">🟫</div>
+                    </div>
+                    
+                    <!-- Objetos -->
+                    <div class="asset-item" data-asset="tree" title="Árvore">
+                        <div class="draggable-asset emoji-asset" draggable="true">🌳</div>
+                    </div>
+                    <div class="asset-item" data-asset="door" title="Porta">
+                        <div class="draggable-asset emoji-asset" draggable="true">🚪</div>
+                    </div>
+                    <div class="asset-item" data-asset="chest" title="Baú">
+                        <div class="draggable-asset emoji-asset" draggable="true">🧰</div>
+                    </div>
+                    
+                    <!-- Personagens -->
+                    <div class="asset-item" data-asset="monster" title="Monstro">
+                        <div class="draggable-asset emoji-asset" draggable="true">👹</div>
+                    </div>
+                    <div class="asset-item" data-asset="npc" title="NPC">
+                        <div class="draggable-asset emoji-asset" draggable="true">🧙</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Área do Mapa -->
+            <div class="col-md-10 p-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="mb-0">Editor de Dungeon</h3>
+                    <div class="d-flex gap-2">
+                        <div class="input-group input-group-sm" style="width: 150px;">
+                            <span class="input-group-text">Grid:</span>
+                            <input type="number" id="gridSize" class="form-control" value="40" min="10" max="100">
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="gridToggle" checked>
+                            <label class="form-check-label" for="gridToggle">Mostrar Grid</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="position-relative">
+                    <canvas id="mapCanvas" width="800" height="600"></canvas>
+                    <div id="canvasOverlay" class="position-absolute top-0 start-0" style="pointer-events: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Asset Details -->
+    <div class="modal fade" id="assetModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="assetModalTitle">Asset</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Tamanho:</label>
+                        <input type="range" class="form-range" id="assetSize" min="20" max="60" value="30">
+                    </div>
+                    <button id="deleteAsset" class="btn btn-danger w-100">Remover</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Seu JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>
